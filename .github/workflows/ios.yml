@@ -1,0 +1,58 @@
+name: Validate iOS application
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'shared/**'
+      - 'ios/**'
+      - 'capacitor.config.ts'
+      - 'vite.mobile.config.ts'
+      - 'tsconfig.mobile.json'
+      - 'vitest.mobile.config.ts'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Test mobile business logic and UI
+        run: pnpm run test:mobile
+      - name: Build mobile web application
+        run: pnpm run build:mobile
+      - name: Synchronize native iOS project
+        run: pnpm exec cap sync ios
+      - name: Build iPhone and iPad application for Simulator
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath ios/App/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Upload unsigned Simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: certmaster-ai-ios-simulator
+          path: ios/App/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error

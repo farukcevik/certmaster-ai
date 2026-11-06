@@ -6,6 +6,11 @@ All notable changes are documented here. Version headings follow semantic versio
 
 ### Added
 
+- Capacitor iOS application with touch-first iPhone and responsive iPad layouts.
+- Native iOS SQLite persistence, deterministic 349-question initialization, resumable sessions, bookmarks, analytics, and versioned Files/Share Sheet backups.
+- Mobile exam, practice, incorrect-question, bookmarked-question, and custom modes with stable option randomization.
+- Dedicated mobile case-study reader, offline images, SQL/table rendering, English/Turkish UI, and dark mode.
+- Separate iOS validation workflow and physical-device setup documentation.
 - Native GitHub Actions builds for macOS arm64, macOS x64, and Windows x64.
 - Draft GitHub Release automation with SHA-256 checksum files.
 - Explicit Electron ABI rebuilds for `better-sqlite3`.

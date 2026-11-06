@@ -4,6 +4,7 @@ build/icon.iconset/
 build/icon.svg.png
 dist/
 dist-electron/
+dist-mobile/
 release/
 coverage/
 playwright-report/
@@ -23,5 +24,8 @@ backups/
 *.tsbuildinfo
 *.log
 .DS_Store
+ios/App/DerivedData/
+ios/App/build/
+*.xcuserstate
 .env*
 !.env.example

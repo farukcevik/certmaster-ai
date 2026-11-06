@@ -11,6 +11,11 @@
     "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json --watch --preserveWatchOutput\" \"wait-on tcp:5173 dist-electron/electron/main/index.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "npm run typecheck && vite build && tsc -p tsconfig.electron.json",
     "build:renderer": "vite build",
+    "dev:mobile": "vite --config vite.mobile.config.ts",
+    "build:mobile": "tsc -p tsconfig.mobile.json --noEmit && vite build --config vite.mobile.config.ts",
+    "test:mobile": "vitest run --config vitest.mobile.config.ts",
+    "ios:sync": "pnpm run build:mobile && cap sync ios",
+    "ios:open": "cap open ios",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "pnpm run test:unit && pnpm run test:e2e",
     "test:unit": "pnpm rebuild better-sqlite3 && vitest run",
@@ -26,6 +31,13 @@
     "package:win": "npm run build && pnpm run rebuild:electron -- -a x64 && electron-builder --win nsis --x64 --config.npmRebuild=false"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "8.1.1",
+    "@capacitor/app": "8.0.0",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/ios": "8.6.0",
+    "@capacitor/share": "8.0.0",
+    "@capacitor/splash-screen": "8.0.0",
     "@electron-toolkit/utils": "^4.0.0",
     "better-sqlite3": "^12.4.1",
     "electron-store": "^11.0.2",
@@ -42,6 +54,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.6.0",
     "@electron/rebuild": "^4.2.1",
     "@eslint/js": "^9.39.0",
     "@playwright/test": "^1.56.1",
@@ -76,11 +89,50 @@
     "appId": "com.certmasterai.desktop",
     "productName": "CertMaster AI",
     "asar": true,
-    "directories": { "output": "release" },
-    "files": ["dist/**/*", "dist-electron/**/*", "!dist-electron/**/*.test.js", "question-banks/**/*", "package.json"],
-    "asarUnpack": ["**/*.node"],
-    "mac": { "icon": "build/icon.png", "category": "public.app-category.education", "artifactName": "CertMaster-AI-${version}-mac-${arch}.${ext}", "target": [{"target":"dmg","arch":["arm64","x64"]}], "hardenedRuntime": true, "gatekeeperAssess": false },
-    "win": { "icon": "build/icon.ico", "artifactName": "CertMaster-AI-${version}-win-${arch}-setup.${ext}", "target": [{"target":"nsis","arch":["x64"]}] },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "!dist-electron/**/*.test.js",
+      "question-banks/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.education",
+      "artifactName": "CertMaster-AI-${version}-mac-${arch}.${ext}",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "artifactName": "CertMaster-AI-${version}-win-${arch}-setup.${ext}",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }
