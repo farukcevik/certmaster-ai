@@ -1,0 +1,2 @@
+import {render,screen} from '@testing-library/react';import {describe,expect,it} from 'vitest';import {PageHeader} from './ui';
+describe('PageHeader',()=>{it('renders accessible title and description',()=>{render(<PageHeader title="Soru Bankası" description="Soruları yönetin"/>);expect(screen.getByRole('heading',{name:'Soru Bankası'})).toBeInTheDocument();expect(screen.getByText('Soruları yönetin')).toBeInTheDocument()})});

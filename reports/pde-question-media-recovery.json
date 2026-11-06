@@ -1,0 +1,13 @@
+{
+  "questionsWithRequiredImages": 3,
+  "imagesAttached": 3,
+  "sqlOptionsRecovered": 4,
+  "pageNumberArtifactsRemoved": 64,
+  "correctAnswersPreserved": true,
+  "databaseIntegrity": "ok",
+  "idempotentSecondRun": {
+    "sqlOptionsRecovered": 0,
+    "pageNumberArtifactsRemoved": 0
+  },
+  "questions": ["GCP-PDE-063", "GCP-PDE-243", "GCP-PDE-248"]
+}

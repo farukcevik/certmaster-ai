@@ -1,0 +1,26 @@
+{
+  "processed": 349,
+  "reformatted": 349,
+  "manualReview": 30,
+  "caseStudies": 12,
+  "questionsWithCode": 33,
+  "codeBlocks": 33,
+  "questionsWithTables": 0,
+  "tables": 0,
+  "questionsWithImages": 22,
+  "imageNotices": 24,
+  "integrity": {
+    "ok": true,
+    "message": "ok"
+  },
+  "immutableHash": "d446c028e5885df8b463996511bea846baae5260e7210414d2712f6133946c03",
+  "userData": {
+    "sessions": 1,
+    "attempts": 50,
+    "bookmarks": 0,
+    "translations": 0
+  },
+  "backup": "/Users/farukcevik/Library/Application Support/certmaster-ai/certmaster-before-formatting-2026-11-05T18-53-37-652Z.db",
+  "database": "/Users/farukcevik/Library/Application Support/certmaster-ai/certmaster.db",
+  "source": "/Users/farukcevik/Desktop/professional-data-engineer.pdf"
+}
