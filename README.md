@@ -2,7 +2,7 @@
 
 CertMaster AI is an offline-first Electron desktop application for importing, managing, translating, and practicing certification questions. The primary UI is Turkish, with English UI support and independent English/Turkish/bilingual question display.
 
-Commercial or user-supplied question banks are not published with the source repository. Place an authorized local bank at `question-banks/GCP_PDE_349_questions.json` or import it through the application. Stable source identifiers make imports idempotent, and no question content is downloaded at runtime.
+The repository includes the user-authorized, locally extracted Google Cloud Professional Data Engineer bank at `question-banks/GCP_PDE_349_questions.json`, together with its recovered question images. Stable source identifiers make imports idempotent, and no question content is downloaded at runtime.
 
 ## Implemented capabilities
 
