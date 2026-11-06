@@ -1,0 +1,186 @@
+name: Build desktop release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      create_draft_release:
+        description: Create a draft GitHub Release from the built artifacts
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.20.0'
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    env:
+      CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm typecheck
+      - name: Unit and integration tests
+        run: pnpm run test:unit
+      - name: Build renderer and Electron sources
+        run: pnpm build
+      - name: Create isolated seeded test database
+        run: pnpm run seed:pde -- "$RUNNER_TEMP/certmaster-e2e.db"
+      - name: Detect runner architecture
+        id: host
+        shell: bash
+        run: |
+          case "$(uname -m)" in
+            arm64) echo "arch=arm64" >> "$GITHUB_OUTPUT" ;;
+            x86_64) echo "arch=x64" >> "$GITHUB_OUTPUT" ;;
+            *) echo "arch=unknown" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Rebuild SQLite for Electron ${{ matrix.arch }}
+        run: pnpm run rebuild:electron -- -a ${{ matrix.arch }}
+      - name: Package macOS ${{ matrix.arch }} DMG
+        run: pnpm exec electron-builder --mac dmg --${{ matrix.arch }} --config.npmRebuild=false
+      - name: Validate macOS package structure
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          test -f "release/CertMaster-AI-${VERSION}-mac-${{ matrix.arch }}.dmg"
+          APP_DIR="release/mac"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then APP_DIR="release/mac-arm64"; fi
+          test -f "$APP_DIR/CertMaster AI.app/Contents/Resources/app.asar"
+          test -f "$APP_DIR/CertMaster AI.app/Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          file "$APP_DIR/CertMaster AI.app/Contents/MacOS/CertMaster AI"
+          file "$APP_DIR/CertMaster AI.app/Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            file "$APP_DIR/CertMaster AI.app/Contents/MacOS/CertMaster AI" | grep -q arm64
+            file "$APP_DIR/CertMaster AI.app/Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node" | grep -q arm64
+          else
+            file "$APP_DIR/CertMaster AI.app/Contents/MacOS/CertMaster AI" | grep -q x86_64
+            file "$APP_DIR/CertMaster AI.app/Contents/Resources/app.asar.unpacked/node_modules/better-sqlite3/build/Release/better_sqlite3.node" | grep -q x86_64
+          fi
+      - name: Runtime-test native macOS package
+        if: steps.host.outputs.arch == matrix.arch
+        env:
+          CERTMASTER_E2E_EXECUTABLE: ${{ matrix.arch == 'arm64' && format('{0}/release/mac-arm64/CertMaster AI.app/Contents/MacOS/CertMaster AI', github.workspace) || format('{0}/release/mac/CertMaster AI.app/Contents/MacOS/CertMaster AI', github.workspace) }}
+        run: pnpm exec playwright test
+      - name: Record runtime-test scope
+        if: steps.host.outputs.arch != matrix.arch
+        run: echo "Package built but not launched because runner architecture is ${{ steps.host.outputs.arch }}." >> "$GITHUB_STEP_SUMMARY"
+      - name: Generate SHA-256 checksum
+        run: node scripts/generate-checksums.mjs release SHA256SUMS-mac-${{ matrix.arch }}.txt .dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: certmaster-mac-${{ matrix.arch }}
+          path: |
+            release/CertMaster-AI-*-mac-${{ matrix.arch }}.dmg
+            release/SHA256SUMS-mac-${{ matrix.arch }}.txt
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    env:
+      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm typecheck
+      - name: Unit and integration tests
+        run: pnpm run test:unit
+      - name: Build renderer and Electron sources
+        run: pnpm build
+      - name: Create isolated seeded test database
+        shell: pwsh
+        run: pnpm run seed:pde -- "$env:RUNNER_TEMP\certmaster-e2e.db"
+      - name: Rebuild SQLite for Electron x64
+        run: pnpm run rebuild:electron -- -a x64
+      - name: Package Windows x64 installer
+        run: pnpm exec electron-builder --win nsis --x64 --config.npmRebuild=false
+      - name: Validate Windows package structure
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          if (-not (Test-Path "release\CertMaster-AI-$version-win-x64-setup.exe")) { throw 'Windows installer missing' }
+          if (-not (Test-Path "release\win-unpacked\CertMaster AI.exe")) { throw 'Unpacked executable missing' }
+          if (-not (Test-Path "release\win-unpacked\resources\app.asar")) { throw 'app.asar missing' }
+          if (-not (Test-Path "release\win-unpacked\resources\app.asar.unpacked\node_modules\better-sqlite3\build\Release\better_sqlite3.node")) { throw 'better-sqlite3 missing' }
+      - name: Runtime-test packaged Windows application
+        shell: pwsh
+        env:
+          CERTMASTER_E2E_EXECUTABLE: ${{ github.workspace }}/release/win-unpacked/CertMaster AI.exe
+        run: pnpm exec playwright test
+      - name: Generate SHA-256 checksum
+        run: node scripts/generate-checksums.mjs release SHA256SUMS-win-x64.txt .exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: certmaster-win-x64
+          path: |
+            release/CertMaster-AI-*-win-x64-setup.exe
+            release/SHA256SUMS-win-x64.txt
+          if-no-files-found: error
+
+  draft-release:
+    name: Create draft GitHub Release
+    needs: [macos, windows]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_draft_release)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Verify downloaded release files
+        run: |
+          test -n "$(find release-assets -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$(find release-assets -maxdepth 1 -name '*.exe' -print -quit)"
+          test "$(find release-assets -maxdepth 1 -name 'SHA256SUMS-*.txt' | wc -l)" -eq 3
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/*.dmg
+            release-assets/*.exe
+            release-assets/SHA256SUMS-*.txt

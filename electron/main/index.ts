@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { AppDatabase } from '../database/index.js';
 import { AiService } from '../services/ai.js';
 import { adaptProfessionalDataEngineerPdf, previewImport } from '../services/importer.js';
+import { seedBundledQuestionBank } from '../services/bundledBank.js';
 import { answerSchema, examConfigSchema, glossaryInputSchema, providerSettingsSchema, questionInputSchema, translationInputSchema } from '../../shared/contracts.js';
 import { z } from 'zod';
 
@@ -32,5 +33,5 @@ function registerIpc(){
   on('settings:get',()=>db.settings());on('settings:set',(key,value)=>{z.string().min(1).parse(key);if(key==='aiProvider')providerSettingsSchema.parse(value);db.setSetting(key,value);if(key==='theme')nativeTheme.themeSource=z.enum(['system','light','dark']).parse(value)});on('settings:credential',(provider,secret)=>ai.setCredential(z.enum(['gemini','openai']).parse(provider),z.string().parse(secret)));on('settings:test-ai',(provider)=>ai.test(z.enum(['ollama','gemini','openai']).parse(provider)));
 }
 
-app.whenReady().then(()=>{dbPath=join(app.getPath('userData'),'certmaster.db');db=new AppDatabase(dbPath);ai=new AiService(db);session.defaultSession.webRequest.onHeadersReceived((details,callback)=>callback({responseHeaders:{...details.responseHeaders,'Content-Security-Policy':[process.env.VITE_DEV_SERVER_URL?"default-src 'self' http://localhost:5173; script-src 'self' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:5173 http://127.0.0.1:11434":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:11434"]}}));registerIpc();createWindow();app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)createWindow()})});
+app.whenReady().then(()=>{dbPath=join(app.getPath('userData'),'certmaster.db');db=new AppDatabase(dbPath);try{const result=seedBundledQuestionBank(db,join(app.getAppPath(),'question-banks/GCP_PDE_349_questions.json'));if(result.available)console.info('bundled-question-bank',result)}catch(error){console.error('bundled-question-bank',error)}ai=new AiService(db);session.defaultSession.webRequest.onHeadersReceived((details,callback)=>callback({responseHeaders:{...details.responseHeaders,'Content-Security-Policy':[process.env.VITE_DEV_SERVER_URL?"default-src 'self' http://localhost:5173; script-src 'self' http://localhost:5173; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws://localhost:5173 http://127.0.0.1:11434":"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:11434"]}}));registerIpc();createWindow();app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)createWindow()})});
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit()});app.on('before-quit',()=>db?.close());

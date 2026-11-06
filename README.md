@@ -1,8 +1,55 @@
 # CertMaster AI – Offline Certification Exam Simulator
 
+[![Build desktop release](https://github.com/farukcevik/certmaster-ai/actions/workflows/release.yml/badge.svg)](https://github.com/farukcevik/certmaster-ai/actions/workflows/release.yml)
+
+## Download
+
+Installers are attached to [GitHub Releases](https://github.com/farukcevik/certmaster-ai/releases). Each release provides:
+
+- `CertMaster-AI-VERSION-mac-arm64.dmg` — Apple Silicon Macs
+- `CertMaster-AI-VERSION-mac-x64.dmg` — Intel Macs
+- `CertMaster-AI-VERSION-win-x64-setup.exe` — Windows 10/11 x64
+- `SHA256SUMS-*.txt` — installer integrity checksums
+
+No release is currently published automatically. The release workflow creates a draft after every mandatory build and test succeeds; a maintainer must review and publish it. Unsigned testing builds may trigger macOS Gatekeeper or Windows SmartScreen warnings.
+
 CertMaster AI is an offline-first Electron desktop application for importing, managing, translating, and practicing certification questions. The primary UI is Turkish, with English UI support and independent English/Turkish/bilingual question display.
 
 The repository includes the user-authorized, locally extracted Google Cloud Professional Data Engineer bank at `question-banks/GCP_PDE_349_questions.json`, together with its recovered question images. Stable source identifiers make imports idempotent, and no question content is downloaded at runtime.
+
+## Screenshots
+
+| Structured case study | Image-based question | Correct-answer editor |
+| --- | --- | --- |
+| ![Flowlogistic case-study reader](docs/screenshots/flowlogistic-case-study.png) | ![Offline question image rendering](docs/screenshots/question-image-question.png) | ![Correct-answer editor](docs/screenshots/correct-answer-editor.png) |
+
+## Supported systems
+
+| System | Package | Release build runner | Runtime validation |
+| --- | --- | --- | --- |
+| macOS Apple Silicon | arm64 DMG | `macos-latest` | Only when runner architecture is arm64 |
+| macOS Intel | x64 DMG | `macos-latest` | Only when runner architecture is x64 |
+| Windows 10/11 | x64 NSIS installer | `windows-latest` | Packaged app is launched with Playwright |
+
+End users do not need Node.js, pnpm, Git, a compiler, or a terminal.
+
+## Installation
+
+### macOS
+
+1. Download the DMG matching **Apple Silicon** or **Intel** from GitHub Releases.
+2. Verify its SHA-256 digest against the matching checksum file.
+3. Open the DMG and move **CertMaster AI** to Applications.
+4. For an unsigned testing build, use **System Settings → Privacy & Security → Open Anyway** after confirming the checksum and source.
+
+### Windows
+
+1. Download `CertMaster-AI-VERSION-win-x64-setup.exe`.
+2. Verify its SHA-256 digest against `SHA256SUMS-win-x64.txt`.
+3. Run the installer and choose the installation directory.
+4. Unsigned testing builds can show a SmartScreen warning; verify the checksum before continuing.
+
+CertMaster AI stores its SQLite database in the operating system application-data directory and works without an internet connection or account.
 
 ## Implemented capabilities
 
@@ -19,7 +66,7 @@ The repository includes the user-authorized, locally extracted Google Cloud Prof
 - Full local SQLite backup/restore with pre-restore integrity and schema validation.
 - Unit, integration, React Testing Library, and Electron Playwright tests.
 
-## Requirements
+## Developer requirements
 
 - Node.js 22 or later
 - pnpm 10 or later
@@ -48,20 +95,26 @@ pnpm build
 
 `test:e2e` builds the application and rebuilds native dependencies for Electron before launching a temporary isolated profile.
 
-## Distribution
+## Build and distribution
 
 ```bash
 # Current platform
 pnpm package
 
-# macOS arm64 + x64 DMG/ZIP (must run on macOS)
+# macOS arm64 + x64 DMGs (must run on macOS)
 pnpm package:mac
+
+# Individual macOS architectures
+pnpm package:mac:arm64
+pnpm package:mac:x64
 
 # Windows x64 NSIS installer (prefer running on Windows CI/host)
 pnpm package:win
 ```
 
 Unsigned local macOS packages are suitable for testing. Public distribution requires an Apple Developer ID certificate and notarization credentials. Windows signing similarly requires a code-signing certificate.
+
+Version tags such as `v1.0.0` trigger [.github/workflows/release.yml](.github/workflows/release.yml). Builds run on native GitHub runners, rebuild `better-sqlite3` for the target Electron ABI, execute mandatory validation, generate SHA-256 files, and create a draft GitHub Release. See [Release process](docs/RELEASING.md).
 
 ## Import Google Cloud Professional Data Engineer questions
 
@@ -75,7 +128,7 @@ Unsigned local macOS packages are suitable for testing. Public distribution requ
 
 For an approximately 349-question source, JSON is the most reliable format. The supported schema is documented in [docs/IMPORT_SCHEMA.md](docs/IMPORT_SCHEMA.md).
 
-The integrated bank contains 349 validated records: 330 single-answer and 19 multiple-answer questions. Thirty records are marked for manual review because the PDF contains embedded images or visual references. Q243 contains image-only SQL answer options and therefore uses explicit missing-image placeholders rather than invented text.
+The integrated bank contains 349 validated records: 329 single-answer, 19 multiple-answer, and one image-answer question. All three required source visuals have been recovered; no current record is flagged for missing image content.
 
 Long PDF questions retain both their immutable normalized text and a versioned structured document. The exam reader renders case-study headings, paragraphs, nested lists, code blocks, tables, and image notices without executing HTML. Case studies offer standard and independently scrollable split views.
 
@@ -100,6 +153,9 @@ The command creates a timestamped database backup, matches `GCP-PDE-001` through
 - [Import schema](docs/IMPORT_SCHEMA.md)
 - [Question formatting recovery](docs/QUESTION_FORMATTING.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Release process](docs/RELEASING.md)
+- [Security policy](SECURITY.md)
+- [Changelog](CHANGELOG.md)
 
 ## Known limitations
 
@@ -107,7 +163,9 @@ The command creates a timestamped database backup, matches `GCP-PDE-001` through
 - PDF text parsing supports common numbered-question layouts but cannot reliably infer arbitrary publisher layouts. Missing answers are never fabricated.
 - Embedded PDF image extraction and question-image editing are represented in the database schema but are not yet exposed by the importer UI.
 - Bulk AI translation currently processes one selected question at a time; manual translation and local caching are complete, while resumable batch job controls are not yet exposed in the UI.
-- macOS Intel and Windows build configurations are included, but only the host architecture can be runtime-tested locally.
+- A macOS host cannot runtime-validate Windows. Windows runtime validation is performed only by the `windows-latest` GitHub Actions job.
+- macOS packages are runtime-tested only when the target matches the architecture of the selected GitHub runner; the other architecture is build- and structure-validated.
+- Signing and notarization require maintainer-provided GitHub Actions secrets. Builds without them are explicitly treated as unsigned testing builds.
 
 ## Data and privacy
 

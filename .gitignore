@@ -14,6 +14,13 @@ backups/
 *.sqlite3
 *.cmbak
 *.pdf
+*.p12
+*.pfx
+*.cer
+*.crt
+*.key
+*.mobileprovision
+*.tsbuildinfo
 *.log
 .DS_Store
 .env*
