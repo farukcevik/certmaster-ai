@@ -1,25 +1,29 @@
-import {calculateScore,sameAnswer,shuffled,shuffledDifferentFrom} from '../../shared/examEngine';
+import {calculateScore,sameAnswer,shuffled,shuffledDifferentFrom,withinQuestionRange} from '../../shared/examEngine';
 import {loadBundledQuestions} from '../data/bundledBank';
-import type {MobileAttempt,MobileBackup,MobileExamConfig,MobileQuestion,MobileSession,MobileSettings,MobileStatistics} from '../models';
+import type {MobileAttempt,MobileBackup,MobileExamConfig,MobileQuestion,MobileQuestionOverride,MobileSession,MobileSettings,MobileStatistics} from '../models';
 import type {MobileRepository,QuestionFilters} from './repository';
 
-interface BrowserState {sessions:MobileSession[];attempts:MobileAttempt[];bookmarks:string[];settings:MobileSettings}
+interface BrowserState {sessions:MobileSession[];attempts:MobileAttempt[];bookmarks:string[];settings:MobileSettings;questionOverrides:Record<string,MobileQuestionOverride>}
 const STORAGE_KEY='certmaster.mobile.v1';
-const defaults:BrowserState={sessions:[],attempts:[],bookmarks:[],settings:{interfaceLanguage:'tr',questionLanguage:'en',theme:'system'}};
+const defaults:BrowserState={sessions:[],attempts:[],bookmarks:[],settings:{interfaceLanguage:'tr',questionLanguage:'en',theme:'system'},questionOverrides:{}};
 const uid=()=>crypto.randomUUID();
 
 function readState():BrowserState{
-  try{return {...defaults,...JSON.parse(localStorage.getItem(STORAGE_KEY)??'{}')} as BrowserState}catch{return structuredClone(defaults)}
+  try{const stored=JSON.parse(localStorage.getItem(STORAGE_KEY)??'{}');return {...defaults,...stored,questionOverrides:stored.questionOverrides??{}} as BrowserState}catch{return structuredClone(defaults)}
 }
 function writeState(state:BrowserState){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
 function streak(attempts:MobileAttempt[]){const days=new Set(attempts.map(attempt=>attempt.attemptedAt.slice(0,10)));let count=0,cursor=new Date();while(days.has(cursor.toISOString().slice(0,10))){count++;cursor.setDate(cursor.getDate()-1)}return count}
+function activeIncorrect(attempts:MobileAttempt[]){const latest=new Map<string,boolean>();for(const attempt of attempts)latest.set(attempt.questionId,attempt.isCorrect);return new Set([...latest].filter(([,correct])=>!correct).map(([id])=>id))}
+function applyOverride(question:MobileQuestion,override?:MobileQuestionOverride):MobileQuestion{return override?{...question,type:override.type,options:question.options.map(option=>({...option,isCorrect:override.correctOptionIds.includes(option.id)})),userExplanation:{en:override.userExplanationEn,tr:override.userExplanationTr}}:question}
+function validateOverride(question:MobileQuestion,override:Omit<MobileQuestionOverride,'updatedAt'>){const ids=new Set(question.options.map(option=>option.id));if(!override.correctOptionIds.length||override.correctOptionIds.some(id=>!ids.has(id)))throw new Error('Geçerli en az bir doğru cevap seçin.');if(override.type==='single'&&override.correctOptionIds.length!==1)throw new Error('Tek cevaplı soruda yalnızca bir doğru cevap seçilebilir.')}
+function freezeEvaluations(state:BrowserState,questions:MobileQuestion[]){state.sessions=state.sessions.map(session=>{if(session.status!=='completed')return session;const evaluatedAnswers={...(session.evaluatedAnswers??{})};for(const id of session.questionIds){if(evaluatedAnswers[id])continue;const question=questions.find(item=>item.id===id);if(!question)continue;const correctOptionIds=question.options.filter(option=>option.isCorrect).map(option=>option.id);evaluatedAnswers[id]={correctOptionIds,isCorrect:sameAnswer(session.answers[id]??[],correctOptionIds)}}return{...session,evaluatedAnswers}})}
 
 export class BrowserMobileRepository implements MobileRepository{
   private questions:MobileQuestion[]=[];
-  async initialize(){this.questions=loadBundledQuestions();if(!localStorage.getItem(STORAGE_KEY))writeState(structuredClone(defaults))}
-  private withBookmarks(question:MobileQuestion){return{...question,bookmarked:readState().bookmarks.includes(question.id)}}
+  async initialize(){if(!localStorage.getItem(STORAGE_KEY))writeState(structuredClone(defaults));const state=readState();this.questions=loadBundledQuestions().map(question=>applyOverride(question,state.questionOverrides[question.id]))}
+  private withState(question:MobileQuestion,state=readState(),incorrect=activeIncorrect(state.attempts)){return{...question,bookmarked:state.bookmarks.includes(question.id),incorrect:incorrect.has(question.id)}}
   async listQuestions(filters:QuestionFilters={}){
-    const state=readState(),incorrect=new Set(state.attempts.filter(attempt=>!attempt.isCorrect).map(attempt=>attempt.questionId));
+    const state=readState(),incorrect=activeIncorrect(state.attempts);
     return this.questions.filter(question=>{
       if(filters.search&&!`${question.originalText} ${question.sourceIdentifier}`.toLocaleLowerCase().includes(filters.search.toLocaleLowerCase()))return false;
       if(filters.bookmarked&&!state.bookmarks.includes(question.id))return false;
@@ -27,24 +31,26 @@ export class BrowserMobileRepository implements MobileRepository{
       if(filters.difficulties?.length&&!filters.difficulties.includes(question.difficulty))return false;
       if(filters.tags?.length&&!filters.tags.some(tag=>question.tags.includes(tag)))return false;
       return true;
-    }).map(question=>this.withBookmarks(question));
+    }).map(question=>this.withState(question,state,incorrect));
   }
-  async getQuestion(id:string){const question=this.questions.find(item=>item.id===id);if(!question)throw new Error('Soru bulunamadı');return this.withBookmarks(question)}
+  async getQuestion(id:string){const question=this.questions.find(item=>item.id===id);if(!question)throw new Error('Soru bulunamadı');return this.withState(question)}
   async toggleBookmark(id:string){const state=readState(),index=state.bookmarks.indexOf(id);if(index>=0)state.bookmarks.splice(index,1);else state.bookmarks.push(id);writeState(state);return index<0}
+  async saveQuestionOverride(input:Omit<MobileQuestionOverride,'updatedAt'>){const current=this.questions.find(item=>item.id===input.questionId);if(!current)throw new Error('Soru bulunamadı');validateOverride(current,input);const state=readState();freezeEvaluations(state,this.questions);const override={...input,correctOptionIds:[...new Set(input.correctOptionIds)],updatedAt:new Date().toISOString()};state.questionOverrides[input.questionId]=override;writeState(state);this.questions=this.questions.map(question=>question.id===input.questionId?applyOverride(question,override):question);return this.getQuestion(input.questionId)}
   async createSession(config:MobileExamConfig){
     const filters:QuestionFilters={difficulties:config.difficulties,tags:config.tags,bookmarked:config.mode==='bookmarked',incorrect:config.mode==='incorrect'};
-    let available=await this.listQuestions(filters);if(config.randomizeQuestions)available=shuffled(available);available=available.slice(0,config.questionCount);if(!available.length)throw new Error('Bu ölçütlere uygun soru bulunamadı.');
+    let available=(await this.listQuestions(filters)).filter(question=>withinQuestionRange(question.sourceIdentifier,config.rangeStart,config.rangeEnd));if(config.randomizeQuestions)available=shuffled(available);available=available.slice(0,config.questionCount);if(!available.length)throw new Error('Bu ölçütlere uygun soru bulunamadı.');
     const previous=readState().sessions.at(-1);const optionOrders:Record<string,string[]>={};
     for(const question of available){const sourceOrder=question.options.map(option=>option.id);optionOrders[question.id]=shuffledDifferentFrom(sourceOrder,previous?.optionOrders[question.id]??sourceOrder)}
-    const now=new Date().toISOString();const session:MobileSession={id:uid(),mode:config.mode,status:'active',questionIds:available.map(question=>question.id),optionOrders,answers:{},reviewFlags:[],validatedQuestionIds:[],currentIndex:0,durationMinutes:config.durationMinutes,remainingSeconds:config.durationMinutes*60,language:config.language,startedAt:now,savedAt:now,completedAt:null,score:null};
+    const now=new Date().toISOString();const session:MobileSession={id:uid(),mode:config.mode,status:'active',questionIds:available.map(question=>question.id),optionOrders,answers:{},reviewFlags:[],validatedQuestionIds:[],evaluatedAnswers:{},currentIndex:0,durationMinutes:config.durationMinutes,remainingSeconds:config.durationMinutes*60,language:config.language,startedAt:now,savedAt:now,completedAt:null,score:null,rangeStart:config.rangeStart,rangeEnd:config.rangeEnd,passingScore:config.passingScore??70};
     const state=readState();state.sessions.push(session);writeState(state);return session;
   }
+  async retakeSession(sessionId:string){const source=readState().sessions.find(session=>session.id===sessionId);if(!source)throw new Error('Önceki sınav bulunamadı.');const questions=source.questionIds.map(id=>this.questions.find(question=>question.id===id)).filter(Boolean) as MobileQuestion[],optionOrders:Record<string,string[]>={};for(const question of questions){const sourceOrder=question.options.map(option=>option.id);optionOrders[question.id]=shuffledDifferentFrom(sourceOrder,source.optionOrders[question.id]??sourceOrder)}const now=new Date().toISOString(),session:MobileSession={...source,id:uid(),status:'active',optionOrders,answers:{},reviewFlags:[],validatedQuestionIds:[],evaluatedAnswers:{},currentIndex:0,remainingSeconds:source.durationMinutes*60,startedAt:now,savedAt:now,completedAt:null,score:null,sourceSessionId:source.id};const state=readState();state.sessions.push(session);writeState(state);return session}
   async activeSession(){return readState().sessions.filter(session=>session.status!=='completed').at(-1)??null}
   async saveSession(session:MobileSession){const state=readState(),index=state.sessions.findIndex(item=>item.id===session.id),saved={...session,savedAt:new Date().toISOString()};if(index>=0)state.sessions[index]=saved;else state.sessions.push(saved);writeState(state)}
   async submitSession(session:MobileSession){
-    const state=readState(),now=new Date().toISOString(),results:boolean[]=[];
-    for(const questionId of session.questionIds){const question=this.questions.find(item=>item.id===questionId)!;const ok=sameAnswer(session.answers[questionId]??[],question.options.filter(option=>option.isCorrect).map(option=>option.id));results.push(ok);state.attempts.push({id:uid(),sessionId:session.id,questionId,isCorrect:ok,attemptedAt:now})}
-    const completed={...session,status:'completed' as const,completedAt:now,savedAt:now,score:calculateScore(results)};const index=state.sessions.findIndex(item=>item.id===session.id);if(index>=0)state.sessions[index]=completed;else state.sessions.push(completed);writeState(state);return completed;
+    const state=readState(),now=new Date().toISOString(),results:boolean[]=[],evaluatedAnswers:NonNullable<MobileSession['evaluatedAnswers']>={};
+    for(const questionId of session.questionIds){const question=this.questions.find(item=>item.id===questionId)!;const correctOptionIds=question.options.filter(option=>option.isCorrect).map(option=>option.id),ok=sameAnswer(session.answers[questionId]??[],correctOptionIds);results.push(ok);evaluatedAnswers[questionId]={correctOptionIds,isCorrect:ok};state.attempts.push({id:uid(),sessionId:session.id,questionId,isCorrect:ok,attemptedAt:now})}
+    const completed={...session,status:'completed' as const,completedAt:now,savedAt:now,score:calculateScore(results),evaluatedAnswers};const index=state.sessions.findIndex(item=>item.id===session.id);if(index>=0)state.sessions[index]=completed;else state.sessions.push(completed);writeState(state);return completed;
   }
   async history(){return readState().sessions.filter(session=>session.status==='completed').sort((a,b)=>(b.completedAt??'').localeCompare(a.completedAt??''))}
   async attempts(){return readState().attempts}
@@ -52,11 +58,11 @@ export class BrowserMobileRepository implements MobileRepository{
     const state=readState(),completed=state.sessions.filter(session=>session.status==='completed'),correct=state.attempts.filter(attempt=>attempt.isCorrect).length;
     const dates=new Map<string,number>();for(const attempt of state.attempts){const date=attempt.attemptedAt.slice(0,10);dates.set(date,(dates.get(date)??0)+1)}
     const topics=new Map<string,{correct:number;total:number}>();for(const attempt of state.attempts){const question=this.questions.find(item=>item.id===attempt.questionId);for(const tag of question?.tags.length?question.tags:['Genel']){const value=topics.get(tag)??{correct:0,total:0};value.total++;if(attempt.isCorrect)value.correct++;topics.set(tag,value)}}
-    return {totalQuestions:this.questions.length,practicedQuestions:new Set(state.attempts.map(item=>item.questionId)).size,completedExams:completed.length,averageScore:completed.length?Math.round(completed.reduce((sum,item)=>sum+(item.score??0),0)/completed.length*10)/10:0,correctAnswers:correct,incorrectAnswers:state.attempts.length-correct,successRate:state.attempts.length?Math.round(correct/state.attempts.length*1000)/10:0,bookmarks:state.bookmarks.length,streak:streak(state.attempts),recent:completed.slice(-5).reverse().map(item=>({id:item.id,date:item.completedAt??item.startedAt,score:item.score??0,questionCount:item.questionIds.length})),activity:[...dates].map(([date,questions])=>({date,questions})).slice(-7),weakTopics:[...topics].map(([topic,value])=>({topic,accuracy:Math.round(value.correct/value.total*1000)/10,attempts:value.total})).filter(item=>item.attempts>=2).sort((a,b)=>a.accuracy-b.accuracy).slice(0,5)};
+    return {totalQuestions:this.questions.length,practicedQuestions:new Set(state.attempts.map(item=>item.questionId)).size,completedExams:completed.length,averageScore:completed.length?Math.round(completed.reduce((sum,item)=>sum+(item.score??0),0)/completed.length*10)/10:0,correctAnswers:correct,incorrectAnswers:state.attempts.length-correct,activeIncorrectQuestions:activeIncorrect(state.attempts).size,successRate:state.attempts.length?Math.round(correct/state.attempts.length*1000)/10:0,bookmarks:state.bookmarks.length,streak:streak(state.attempts),recent:completed.slice(-5).reverse().map(item=>({id:item.id,date:item.completedAt??item.startedAt,score:item.score??0,questionCount:item.questionIds.length})),activity:[...dates].map(([date,questions])=>({date,questions})).slice(-7),weakTopics:[...topics].map(([topic,value])=>({topic,accuracy:Math.round(value.correct/value.total*1000)/10,attempts:value.total})).filter(item=>item.attempts>=2).sort((a,b)=>a.accuracy-b.accuracy).slice(0,5)};
   }
   async resetStatistics(){const state=readState();state.sessions=[];state.attempts=[];writeState(state)}
   async getSettings(){return readState().settings}
   async saveSettings(settings:MobileSettings){const state=readState();state.settings=settings;writeState(state)}
-  async createBackup():Promise<MobileBackup>{const state=readState();return{format:'certmaster-mobile-backup',version:1,createdAt:new Date().toISOString(),sessions:state.sessions,attempts:state.attempts,bookmarks:state.bookmarks,settings:state.settings}}
-  async restoreBackup(backup:MobileBackup){if(backup.format!=='certmaster-mobile-backup'||backup.version!==1)throw new Error('Desteklenmeyen yedek biçimi');writeState({sessions:backup.sessions,attempts:backup.attempts,bookmarks:backup.bookmarks,settings:backup.settings})}
+  async createBackup():Promise<MobileBackup>{const state=readState();return{format:'certmaster-mobile-backup',version:1,createdAt:new Date().toISOString(),sessions:state.sessions,attempts:state.attempts,bookmarks:state.bookmarks,settings:state.settings,questionOverrides:Object.values(state.questionOverrides)}}
+  async restoreBackup(backup:MobileBackup){if(backup.format!=='certmaster-mobile-backup'||backup.version!==1)throw new Error('Desteklenmeyen yedek biçimi');const existing=readState();writeState({sessions:backup.sessions,attempts:backup.attempts,bookmarks:backup.bookmarks,settings:backup.settings,questionOverrides:backup.questionOverrides?Object.fromEntries(backup.questionOverrides.map(item=>[item.questionId,item])):existing.questionOverrides});await this.initialize()}
 }

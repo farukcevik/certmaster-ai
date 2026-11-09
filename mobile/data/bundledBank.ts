@@ -22,7 +22,9 @@ export function loadBundledQuestions():MobileQuestion[]{
       reviewStatus:parsed.reviewStatus,
       options:parsed.options.map((option,index)=>({id:option.id??`${raw.id}-${index}`,label:option.label,text:option.text,isCorrect:option.isCorrect,sortOrder:option.sortOrder})),
       translation:null,
-      bookmarked:false
+      bookmarked:false,
+      incorrect:false,
+      userExplanation:null
     };
   });
 }

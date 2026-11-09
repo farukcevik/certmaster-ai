@@ -20,6 +20,17 @@ export interface MobileQuestion {
   options:MobileOption[];
   translation?:{translatedText:string;translatedExplanation:string;optionTranslations:Record<string,string>;status:string}|null;
   bookmarked:boolean;
+  incorrect?:boolean;
+  userExplanation?:{en:string;tr:string}|null;
+}
+
+export interface MobileQuestionOverride {
+  questionId:string;
+  type:'single'|'multiple';
+  correctOptionIds:string[];
+  userExplanationEn:string;
+  userExplanationTr:string;
+  updatedAt:string;
 }
 
 export interface MobileExamConfig {
@@ -30,6 +41,9 @@ export interface MobileExamConfig {
   tags:string[];
   language:MobileLanguage;
   randomizeQuestions:boolean;
+  rangeStart?:number;
+  rangeEnd?:number;
+  passingScore?:number;
 }
 
 export interface MobileSession {
@@ -49,15 +63,20 @@ export interface MobileSession {
   savedAt:string;
   completedAt:string|null;
   score:number|null;
+  rangeStart?:number;
+  rangeEnd?:number;
+  passingScore?:number;
+  sourceSessionId?:string;
+  evaluatedAnswers?:Record<string,{correctOptionIds:string[];isCorrect:boolean}>;
 }
 
 export interface MobileAttempt {id:string;sessionId:string;questionId:string;isCorrect:boolean;attemptedAt:string}
 export interface MobileSettings {interfaceLanguage:'tr'|'en';questionLanguage:MobileLanguage;theme:'system'|'light'|'dark'}
 export interface MobileStatistics {
-  totalQuestions:number;practicedQuestions:number;completedExams:number;averageScore:number;correctAnswers:number;incorrectAnswers:number;successRate:number;bookmarks:number;streak:number;
+  totalQuestions:number;practicedQuestions:number;completedExams:number;averageScore:number;correctAnswers:number;incorrectAnswers:number;activeIncorrectQuestions:number;successRate:number;bookmarks:number;streak:number;
   recent:Array<{id:string;date:string;score:number;questionCount:number}>;
   activity:Array<{date:string;questions:number}>;
   weakTopics:Array<{topic:string;accuracy:number;attempts:number}>;
 }
 
-export interface MobileBackup {format:'certmaster-mobile-backup';version:1;createdAt:string;sessions:MobileSession[];attempts:MobileAttempt[];bookmarks:string[];settings:MobileSettings}
+export interface MobileBackup {format:'certmaster-mobile-backup';version:1;createdAt:string;sessions:MobileSession[];attempts:MobileAttempt[];bookmarks:string[];settings:MobileSettings;questionOverrides?:MobileQuestionOverride[]}

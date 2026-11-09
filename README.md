@@ -65,6 +65,8 @@ CertMaster AI stores its SQLite database in the operating system application-dat
 - Normalized SQLite storage with WAL journaling, foreign keys, indexes, transactional writes, migrations, integrity checks, backup, and restore.
 - Certification/provider library and complete question CRUD with single, multiple, true/false, scenario, and image question types.
 - Exam, practice, custom, incorrect-question, and bookmarked-question session creation.
+- Inclusive question-range exams with 10/20/25/50-question presets, custom ranges, ordered/shuffled question modes, per-group completion scores, and mandatory per-session option shuffling.
+- Exact exam retakes from results and history: the question set/order, mode, and duration are retained while answers are cleared and option order is regenerated.
 - Countdown, pause/resume, automatic progress persistence, answer/option randomization, review flags, navigation grid, automatic timeout submission, and restart recovery.
 - Results, history, question review, daily activity, score trends, category accuracy, and weak-topic reporting.
 - Local JSON/CSV/PDF text import preview, duplicate detection, manual correction, partial selection, and explicit OCR-required detection.
@@ -137,6 +139,8 @@ Version tags such as `v1.0.0` trigger [.github/workflows/release.yml](.github/wo
 For an approximately 349-question source, JSON is the most reliable format. The supported schema is documented in [docs/IMPORT_SCHEMA.md](docs/IMPORT_SCHEMA.md).
 
 The integrated bank contains 349 validated records: 329 single-answer, 19 multiple-answer, and one image-answer question. All three required source visuals have been recovered; no current record is flagged for missing image content.
+
+The authorized source PDF was matched deterministically by `GCP-PDE-001` through `GCP-PDE-349`. It contains an original explanation section for 195 questions; the remaining 154 questions are intentionally left without an explanation rather than receiving generated content. The reproducible audit is stored in `reports/pde-explanation-recovery.json`. Existing desktop databases receive source explanation/correctness updates by stable identifier without replacing question/option IDs, history, attempts, bookmarks, or translations.
 
 Long PDF questions retain both their immutable normalized text and a versioned structured document. The exam reader renders case-study headings, paragraphs, nested lists, code blocks, tables, and image notices without executing HTML. Case studies offer standard and independently scrollable split views.
 

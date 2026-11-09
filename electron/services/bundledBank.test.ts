@@ -14,8 +14,8 @@ describe('bundled question-bank initialization',()=>{
     const directory=mkdtempSync(join(tmpdir(),'certmaster-bundled-bank-'));temporary.push(directory);
     const database=new AppDatabase(join(directory,'certmaster.db'));
     const bankPath=join(process.cwd(),'question-banks/GCP_PDE_349_questions.json');
-    expect(seedBundledQuestionBank(database,bankPath)).toEqual({imported:349,duplicates:0,failed:0,available:true});
-    expect(seedBundledQuestionBank(database,bankPath)).toEqual({imported:0,duplicates:349,failed:0,available:true});
+    expect(seedBundledQuestionBank(database,bankPath)).toEqual({imported:349,updated:0,duplicates:0,failed:0,available:true});
+    expect(seedBundledQuestionBank(database,bankPath)).toEqual({imported:0,updated:349,duplicates:349,failed:0,available:true});
     expect(database.listQuestions({certificationId:'cert-google-pde'})).toHaveLength(349);
     database.close();
   });

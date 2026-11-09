@@ -46,7 +46,7 @@ export async function adaptProfessionalDataEngineerPdf(filePath:string):Promise<
     const number=Number(boundaries[index].match![1]);if(questions.some(q=>q.externalId===stableId(number)))continue;
     const lines=allLines.slice(boundaries[index].index+1,boundaries[index+1]?.index??allLines.length);
     const pageMarkers=new Set<number>();const parseParts:string[]=[];for(const line of lines){if(!pageMarkers.has(line.page)){parseParts.push(`[[CM_PAGE_${line.page}_IMAGES_${(imageQuestionPages.get(number)??[]).includes(line.page)?1:0}]]`);pageMarkers.add(line.page)}parseParts.push(line.text)}
-    const parsed=parseBlock(parseParts.join(' '),number,imageQuestionPages.get(number)??[]);questions.push(parsed);
+    const parsed=parseBlock(parseParts.join(' '),number,imageQuestionPages.get(number)??[]);parsed.explanation=recoverPdfExplanation(lines);if(!parsed.explanation&&!parsed.warnings.includes('Source explanation is empty'))parsed.warnings.push('Source explanation is empty');questions.push(parsed);
     const recovered=recoverQuestionContent(lines,visualQuestionNumbers.has(number)?imageQuestionPages.get(number)??[]:[]);formatting.push({sourceIdentifier:stableId(number),...recovered});
   }
   questions.sort((a,b)=>Number(a.externalId?.slice(-3))-Number(b.externalId?.slice(-3)));formatting.sort((a,b)=>a.sourceIdentifier.localeCompare(b.sourceIdentifier));
@@ -56,6 +56,12 @@ export async function adaptProfessionalDataEngineerPdf(filePath:string):Promise<
 }
 
 export function parsePdeQuestionBlock(raw:string,number:number,imagePages:number[]=[]){return parseBlock(raw,number,imagePages)}
+function recoverPdfExplanation(lines:LayoutLine[]){
+  const start=lines.findIndex(line=>/^Explanation\s*$/i.test(line.text));if(start<0)return'';
+  const tail=lines.slice(start+1),discussion=tail.findIndex(line=>/^Community Discussion\s*$/i.test(line.text)),source=(discussion>=0?tail.slice(0,discussion):tail).map(line=>line.text);
+  if(/^Correct Answer:\s*[A-H,;+& ]*$/i.test(source[0]??'')){source.shift();if(/^[A-H](?:\s*[,;+&]\s*[A-H])*\s*\??$/i.test(source[0]??''))source.shift()}
+  return source.join('\n').trim();
+}
 function parseBlock(raw:string,number:number,imagePages:number[]):PreviewQuestion{
   const warnings:string[]=[];const pages=[...raw.matchAll(/\[\[CM_PAGE_(\d+)_IMAGES_(\d+)\]\]/g)].map(m=>({page:Number(m[1]),images:Number(m[2])}));
   const block=cleanSpace(raw.replace(/\[\[CM_PAGE_\d+_IMAGES_\d+\]\]/g,' '));const explanationAt=block.search(/\bExplanation\b/i);const core=explanationAt>=0?block.slice(0,explanationAt):block;const firstOption=core.search(/(?:^|\s)A\)\s/);let questionText=firstOption>=0?core.slice(0,firstOption):core;questionText=cleanSpace(questionText);

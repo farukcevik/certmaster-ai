@@ -1,5 +1,30 @@
 export type RandomSource=()=>number;
 
+export interface QuestionGroup {start:number;end:number;count:number;label:string}
+
+export function questionNumber(identifier:string):number|null{
+  const match=identifier.match(/(\d+)$/);if(!match)return null;
+  const value=Number(match[1]);return Number.isInteger(value)&&value>0?value:null;
+}
+
+export function normalizeQuestionRange(total:number,start?:number,end?:number){
+  const safeTotal=Math.max(0,Math.floor(total));
+  const safeStart=Math.max(1,Math.min(safeTotal||1,Math.floor(start??1)));
+  const safeEnd=Math.max(safeStart,Math.min(safeTotal||safeStart,Math.floor(end??(safeTotal||safeStart))));
+  return{start:safeStart,end:safeEnd,count:safeEnd-safeStart+1};
+}
+
+export function questionGroups(total:number,size:number):QuestionGroup[]{
+  const safeSize=[10,20,25,50].includes(size)?size:20,result:QuestionGroup[]=[];
+  for(let start=1;start<=total;start+=safeSize){const end=Math.min(total,start+safeSize-1);result.push({start,end,count:end-start+1,label:`${start}-${end}`})}
+  return result;
+}
+
+export function withinQuestionRange(identifier:string,start?:number,end?:number):boolean{
+  if(start===undefined&&end===undefined)return true;
+  const number=questionNumber(identifier);return number!==null&&number>=(start??1)&&number<=(end??Number.MAX_SAFE_INTEGER);
+}
+
 export function shuffled<T>(items:readonly T[],random:RandomSource=Math.random):T[]{
   const result=[...items];
   for(let index=result.length-1;index>0;index--){

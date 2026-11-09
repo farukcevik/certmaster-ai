@@ -18,5 +18,5 @@ export function seedBundledQuestionBank(database:AppDatabase,bankPath:string){
     categoryId:null,
     options:Array.isArray(raw.options)?raw.options.map(option=>({...option as object,id:undefined})):raw.options
   }));
-  return{...database.importQuestionBatch(inputs),available:true};
+  return{...database.syncQuestionSourceData(inputs),available:true};
 }

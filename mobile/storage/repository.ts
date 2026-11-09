@@ -1,4 +1,4 @@
-import type {MobileAttempt,MobileBackup,MobileExamConfig,MobileQuestion,MobileSession,MobileSettings,MobileStatistics} from '../models';
+import type {MobileAttempt,MobileBackup,MobileExamConfig,MobileQuestion,MobileQuestionOverride,MobileSession,MobileSettings,MobileStatistics} from '../models';
 
 export interface QuestionFilters {search?:string;bookmarked?:boolean;incorrect?:boolean;difficulties?:MobileQuestion['difficulty'][];tags?:string[]}
 
@@ -7,7 +7,9 @@ export interface MobileRepository {
   listQuestions(filters?:QuestionFilters):Promise<MobileQuestion[]>;
   getQuestion(id:string):Promise<MobileQuestion>;
   toggleBookmark(id:string):Promise<boolean>;
+  saveQuestionOverride(override:Omit<MobileQuestionOverride,'updatedAt'>):Promise<MobileQuestion>;
   createSession(config:MobileExamConfig):Promise<MobileSession>;
+  retakeSession(sessionId:string):Promise<MobileSession>;
   activeSession():Promise<MobileSession|null>;
   saveSession(session:MobileSession):Promise<void>;
   submitSession(session:MobileSession):Promise<MobileSession>;

@@ -20,7 +20,8 @@ test('application starts offline and exposes core navigation',async()=>{
     await window.getByText('Soru Bankası',{exact:true}).click();
     await expect(window.getByText(/TensorFlow neutral-network model/)).toBeVisible();
     await window.getByText('Sınav Başlat',{exact:true}).click();
-    await window.getByLabel('Soru sayısı').fill('349');
+    await window.getByLabel('Başlangıç').fill('1');
+    await window.getByLabel('Bitiş').fill('349');
     await window.getByLabel('Soruları karıştır').uncheck();
     await window.getByRole('button',{name:/Oturumu Başlat/}).click();
     await expect(window.getByText(/Soru 1\/349/)).toBeVisible();
